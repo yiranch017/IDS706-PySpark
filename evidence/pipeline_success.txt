@@ -1,0 +1,8 @@
+Verified workspace.yc791_taxi.quality: 6 rows; CSV /Volumes/workspace/default/taxi_project/results/quality
+Verified workspace.yc791_taxi.borough_hour: 192 rows; CSV /Volumes/workspace/default/taxi_project/results/borough_hour
+Verified workspace.yc791_taxi.zone_summary: 263 rows; CSV /Volumes/workspace/default/taxi_project/results/zone_summary
+Verified workspace.yc791_taxi.monthly_sql: 24 rows; CSV /Volumes/workspace/default/taxi_project/results/monthly_sql
+Verified workspace.yc791_taxi.tips_sql: 206 rows; CSV /Volumes/workspace/default/taxi_project/results/tips_sql
+Verified workspace.yc791_taxi.timings: 6 rows; CSV /Volumes/workspace/default/taxi_project/results/timings
+PIPELINE COMPLETE: 71,204,782 cleaned trips; all assertions passed.
+Reports and summary exports: /Volumes/workspace/default/taxi_project/results

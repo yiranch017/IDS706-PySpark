@@ -1,0 +1,6 @@
+raw/
+cleaned_trips/
+*.parquet
+*.part
+__pycache__/
+.DS_Store

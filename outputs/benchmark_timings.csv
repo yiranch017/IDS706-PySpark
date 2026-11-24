@@ -1,0 +1,7 @@
+repetition,source,seconds
+1,raw_cleaning,17.220630105999987
+1,stored_parquet,0.5702949190000481
+2,raw_cleaning,16.983264939000037
+2,stored_parquet,0.42088717199999337
+3,raw_cleaning,16.82192545500004
+3,stored_parquet,0.45369112599996697

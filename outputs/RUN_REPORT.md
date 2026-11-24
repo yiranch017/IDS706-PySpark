@@ -1,0 +1,15 @@
+# Recorded notebook interpretations
+
+I processed **79,479,946 recorded trips** from **1.237 GiB** of source Parquet files. The cleaning rules retained **71,204,782 trips (89.59%)** and excluded **8,275,164**. The quality table reports mutually exclusive first-failure counts, so its rows add up to the original input count.
+
+The busiest pickup zone is **JFK Airport**, with **3,675,081 retained trips**, an average base fare of **$64.22**, and average duration of **43.11 minutes**. The busiest pickup hour is **18:00–18:59**, with **5,078,067 trips**. The hour with the longest average trip duration is **15:00–15:59**, at **19.64 minutes**; this may reflect trip distance or route mix as well as traffic conditions.
+
+Among zones with at least 1,000 usable credit-card trips, **Outside of NYC** has the highest mean recorded tip percentage: **721.33% of base fare**, across **10,227 trips**. This does not compare cash and card customers' generosity because cash tips are absent. Zone differences may reflect fare levels, short trips, and passenger or route mix, so I do not interpret the ranking as a causal neighborhood effect.
+
+## Performance analysis
+
+I use native Spark expressions for filtering, timestamp calculations, and aggregation, and select only the columns needed by the analysis. The cleaned Parquet is partitioned into pickup months, so the **2024-01** benchmark can restrict its scan by that partition key. The formatted scan plan records partition filters, pushed predicates, and read schemas separately. The raw source is already split by month, and Spark may remove unnecessary union branches, so any timing difference also reflects rebuilding the cleaning lineage rather than partition pruning alone.
+
+I broadcast the unique zone lookup and keep a left join so that **0 unmatched-zone trips** remain visible; the join preserves all **71,204,782 cleaned rows**. Grouped aggregations and sorting can still require data exchanges, so the pipeline avoids an extra unconditional repartition and does not claim to eliminate every shuffle. Raw parsing and repeated cleaning, grouped exchanges, and the initial output write are the main operations to inspect in the query profile; the measured longest-running operator must be identified from Query Details rather than inferred solely from the plan.
+
+Across three alternating warm repetitions, the raw-cleaning query had a median of **16.983s**, compared with **0.454s** over saved Parquet (**37.43x raw/stored**), with matching trip counts and fare sums. The initial cleaned-data write took **29.054s**, so the repeated-query timings do not represent end-to-end first-run speed. Caching 2,719,113 rows took 8.013s including materialization. Median repeated actions were 0.342s uncached and 0.467s cached (0.73x uncached/cached). Estimated repeats to recover the full setup cost: no observed break-even. These wall times include action and result-transfer overhead, and shared compute plus automatic storage caching limit causal comparisons.

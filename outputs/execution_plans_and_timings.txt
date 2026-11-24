@@ -1,0 +1,792 @@
+CELL 23
+== Physical Plan ==
+PhotonResultStage (4)
++- PhotonColumnarToRow (3)
+   +- PhotonProject (2)
+      +- PhotonScan parquet  (1)
+
+
+(1) PhotonScan parquet 
+Output [4]: [payment_type#11932, fare_amount#11934, pickup_hour#11939, trip_month#11943]
+DictionaryFilters: [(payment_type#11932 = 1)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/cleaned_trips]
+PartitionFilters: [isnotnull(trip_month#11943), (trip_month#11943 = 2024-01)]
+ReadSchema: struct<payment_type:int,fare_amount:double,pickup_hour:int>
+RequiredDataFilters: [isnotnull(payment_type#11932), (payment_type#11932 = 1)]
+
+(2) PhotonProject
+Input [4]: [payment_type#11932, fare_amount#11934, pickup_hour#11939, trip_month#11943]
+Arguments: [pickup_hour#11939, fare_amount#11934]
+
+(3) PhotonColumnarToRow
+Input [2]: [pickup_hour#11939, fare_amount#11934]
+
+(4) PhotonResultStage
+Input [2]: [pickup_hour#11939, fare_amount#11934]
+
+
+== Photon Explanation ==
+The query is fully supported by Photon.
+
+== Physical Plan ==
+AdaptiveSparkPlan (23)
++- == Initial Plan ==
+   PhotonResultStage (22)
+   +- PhotonColumnarToRow (21)
+      +- PhotonSort (20)
+         +- PhotonShuffleExchangeSource (19)
+            +- PhotonShuffleMapStage (18)
+               +- PhotonShuffleExchangeSink (17)
+                  +- PhotonGroupingAgg (16)
+                     +- PhotonShuffleExchangeSource (15)
+                        +- PhotonShuffleMapStage (14)
+                           +- PhotonShuffleExchangeSink (13)
+                              +- PhotonGroupingAgg (12)
+                                 +- PhotonProject (11)
+                                    +- PhotonBroadcastHashJoin LeftOuter (10)
+                                       :- PhotonProject (2)
+                                       :  +- PhotonScan parquet  (1)
+                                       +- PhotonShuffleExchangeSource (9)
+                                          +- PhotonShuffleMapStage (8)
+                                             +- PhotonShuffleExchangeSink (7)
+                                                +- PhotonProject (6)
+                                                   +- PhotonFilter (5)
+                                                      +- PhotonRowToColumnar (4)
+                                                         +- Scan csv  (3)
+
+
+(1) PhotonScan parquet 
+Output [6]: [PULocationID#11930, fare_amount#11934, duration_minutes#11938, pickup_hour#11939, fare_per_mile#11941, trip_month#11943]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/cleaned_trips]
+ReadSchema: struct<PULocationID:int,fare_amount:double,duration_minutes:double,pickup_hour:int,fare_per_mile:double>
+
+(2) PhotonProject
+Input [6]: [PULocationID#11930, fare_amount#11934, duration_minutes#11938, pickup_hour#11939, fare_per_mile#11941, trip_month#11943]
+Arguments: [PULocationID#11930, fare_amount#11934, duration_minutes#11938, pickup_hour#11939, fare_per_mile#11941]
+
+(3) Scan csv 
+Output [2]: [LocationID#11967, Borough#11968]
+Batched: false
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/taxi_zone_lookup.csv]
+PushedFilters: [IsNotNull(LocationID)]
+ReadSchema: struct<LocationID:int,Borough:string>
+
+(4) PhotonRowToColumnar
+Input [2]: [LocationID#11967, Borough#11968]
+
+(5) PhotonFilter
+Input [2]: [LocationID#11967, Borough#11968]
+Arguments: isnotnull(LocationID#11967)
+
+(6) PhotonProject
+Input [2]: [LocationID#11967, Borough#11968]
+Arguments: [LocationID#11967 AS PULocationID#12058, Borough#11968]
+
+(7) PhotonShuffleExchangeSink
+Input [2]: [PULocationID#12058, Borough#11968]
+Arguments: SinglePartition
+
+(8) PhotonShuffleMapStage
+Input [2]: [PULocationID#12058, Borough#11968]
+Arguments: EXECUTOR_BROADCAST, [id=#15508]
+
+(9) PhotonShuffleExchangeSource
+Input [2]: [PULocationID#12058, Borough#11968]
+Arguments: false
+
+(10) PhotonBroadcastHashJoin
+Left keys [1]: [PULocationID#11930]
+Right keys [1]: [PULocationID#12058]
+Join type: LeftOuter
+Join condition: None
+
+(11) PhotonProject
+Input [7]: [PULocationID#11930, fare_amount#11934, duration_minutes#11938, pickup_hour#11939, fare_per_mile#11941, PULocationID#12058, Borough#11968]
+Arguments: [fare_amount#11934, duration_minutes#11938, pickup_hour#11939, fare_per_mile#11941, coalesce(Borough#11968, Unmatched) AS pickup_borough#12061]
+
+(12) PhotonGroupingAgg
+Input [5]: [fare_amount#11934, duration_minutes#11938, pickup_hour#11939, fare_per_mile#11941, pickup_borough#12061]
+Arguments: [pickup_borough#12061, pickup_hour#11939], [partial_count(1) AS count#12895L, partial_avg(duration_minutes#11938) AS (sum#12898, count#12899L), partial_percentile_approx(duration_minutes#11938, 0.5, 10000, 0, 0) AS buf#12901, partial_avg(fare_amount#11934) AS (sum#12904, count#12905L), partial_percentile_approx(fare_per_mile#11941, 0.5, 10000, 0, 0) AS buf#12907], [count#12894L, sum#12896, count#12897L, buf#12900, sum#12902, count#12903L, buf#12906], [pickup_borough#12061, pickup_hour#11939, count#12895L, sum#12898, count#12899L, buf#12901, sum#12904, count#12905L, buf#12907], false
+
+(13) PhotonShuffleExchangeSink
+Input [9]: [pickup_borough#12061, pickup_hour#11939, count#12895L, sum#12898, count#12899L, buf#12901, sum#12904, count#12905L, buf#12907]
+Arguments: hashpartitioning(pickup_borough#12061, pickup_hour#11939, 1024)
+
+(14) PhotonShuffleMapStage
+Input [9]: [pickup_borough#12061, pickup_hour#11939, count#12895L, sum#12898, count#12899L, buf#12901, sum#12904, count#12905L, buf#12907]
+Arguments: ENSURE_REQUIREMENTS, [id=#15517]
+
+(15) PhotonShuffleExchangeSource
+Input [9]: [pickup_borough#12061, pickup_hour#11939, count#12895L, sum#12898, count#12899L, buf#12901, sum#12904, count#12905L, buf#12907]
+Arguments: false
+
+(16) PhotonGroupingAgg
+Input [9]: [pickup_borough#12061, pickup_hour#11939, count#12895L, sum#12898, count#12899L, buf#12901, sum#12904, count#12905L, buf#12907]
+Arguments: [pickup_borough#12061, pickup_hour#11939], [finalmerge_count(merge count#12895L) AS count(1)#12889L, finalmerge_avg(merge sum#12898, count#12899L) AS avg(duration_minutes)#12890, finalmerge_percentile_approx(merge buf#12901) AS percentile_approx(duration_minutes, 0.5, 10000)#12891, finalmerge_avg(merge sum#12904, count#12905L) AS avg(fare_amount)#12892, finalmerge_percentile_approx(merge buf#12907) AS percentile_approx(fare_per_mile, 0.5, 10000)#12893], [count(1)#12889L, avg(duration_minutes)#12890, percentile_approx(duration_minutes, 0.5, 10000)#12891, avg(fare_amount)#12892, percentile_approx(fare_per_mile, 0.5, 10000)#12893], [pickup_borough#12061, pickup_hour#11939, count(1)#12889L AS trips#12476L, avg(duration_minutes)#12890 AS avg_duration_minutes#12477, percentile_approx(duration_minutes, 0.5, 10000)#12891 AS median_duration_minutes#12478, avg(fare_amount)#12892 AS avg_base_fare#12479, percentile_approx(fare_per_mile, 0.5, 10000)#12893 AS median_fare_per_mile#12480], true
+
+(17) PhotonShuffleExchangeSink
+Input [7]: [pickup_borough#12061, pickup_hour#11939, trips#12476L, avg_duration_minutes#12477, median_duration_minutes#12478, avg_base_fare#12479, median_fare_per_mile#12480]
+Arguments: rangepartitioning(pickup_borough#12061 ASC NULLS FIRST, pickup_hour#11939 ASC NULLS FIRST, 1024)
+
+(18) PhotonShuffleMapStage
+Input [7]: [pickup_borough#12061, pickup_hour#11939, trips#12476L, avg_duration_minutes#12477, median_duration_minutes#12478, avg_base_fare#12479, median_fare_per_mile#12480]
+Arguments: ENSURE_REQUIREMENTS, [id=#15523]
+
+(19) PhotonShuffleExchangeSource
+Input [7]: [pickup_borough#12061, pickup_hour#11939, trips#12476L, avg_duration_minutes#12477, median_duration_minutes#12478, avg_base_fare#12479, median_fare_per_mile#12480]
+Arguments: false
+
+(20) PhotonSort
+Input [7]: [pickup_borough#12061, pickup_hour#11939, trips#12476L, avg_duration_minutes#12477, median_duration_minutes#12478, avg_base_fare#12479, median_fare_per_mile#12480]
+Arguments: [pickup_borough#12061 ASC NULLS FIRST, pickup_hour#11939 ASC NULLS FIRST]
+
+(21) PhotonColumnarToRow
+Input [7]: [pickup_borough#12061, pickup_hour#11939, trips#12476L, avg_duration_minutes#12477, median_duration_minutes#12478, avg_base_fare#12479, median_fare_per_mile#12480]
+
+(22) PhotonResultStage
+Input [7]: [pickup_borough#12061, pickup_hour#11939, trips#12476L, avg_duration_minutes#12477, median_duration_minutes#12478, avg_base_fare#12479, median_fare_per_mile#12480]
+
+(23) AdaptiveSparkPlan
+Output [7]: [pickup_borough#12061, pickup_hour#11939, trips#12476L, avg_duration_minutes#12477, median_duration_minutes#12478, avg_base_fare#12479, median_fare_per_mile#12480]
+Arguments: isFinalPlan=false
+
+
+== Photon Explanation ==
+The query is fully supported by Photon.
+
+== Physical Plan ==
+AdaptiveSparkPlan (14)
++- == Initial Plan ==
+   PhotonResultStage (13)
+   +- PhotonColumnarToRow (12)
+      +- PhotonProject (11)
+         +- PhotonBroadcastHashJoin LeftOuter (10)
+            :- PhotonProject (2)
+            :  +- PhotonScan parquet  (1)
+            +- PhotonShuffleExchangeSource (9)
+               +- PhotonShuffleMapStage (8)
+                  +- PhotonShuffleExchangeSink (7)
+                     +- PhotonProject (6)
+                        +- PhotonFilter (5)
+                           +- PhotonRowToColumnar (4)
+                              +- Scan csv  (3)
+
+
+(1) PhotonScan parquet 
+Output [3]: [PULocationID#11930, fare_amount#11934, trip_month#11943]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/cleaned_trips]
+ReadSchema: struct<PULocationID:int,fare_amount:double>
+
+(2) PhotonProject
+Input [3]: [PULocationID#11930, fare_amount#11934, trip_month#11943]
+Arguments: [PULocationID#11930, fare_amount#11934]
+
+(3) Scan csv 
+Output [2]: [LocationID#11967, Zone#11969]
+Batched: false
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/taxi_zone_lookup.csv]
+PushedFilters: [IsNotNull(LocationID)]
+ReadSchema: struct<LocationID:int,Zone:string>
+
+(4) PhotonRowToColumnar
+Input [2]: [LocationID#11967, Zone#11969]
+
+(5) PhotonFilter
+Input [2]: [LocationID#11967, Zone#11969]
+Arguments: isnotnull(LocationID#11967)
+
+(6) PhotonProject
+Input [2]: [LocationID#11967, Zone#11969]
+Arguments: [LocationID#11967 AS PULocationID#12058, Zone#11969]
+
+(7) PhotonShuffleExchangeSink
+Input [2]: [PULocationID#12058, Zone#11969]
+Arguments: SinglePartition
+
+(8) PhotonShuffleMapStage
+Input [2]: [PULocationID#12058, Zone#11969]
+Arguments: EXECUTOR_BROADCAST, [id=#15629]
+
+(9) PhotonShuffleExchangeSource
+Input [2]: [PULocationID#12058, Zone#11969]
+Arguments: false
+
+(10) PhotonBroadcastHashJoin
+Left keys [1]: [PULocationID#11930]
+Right keys [1]: [PULocationID#12058]
+Join type: LeftOuter
+Join condition: None
+
+(11) PhotonProject
+Input [4]: [PULocationID#11930, fare_amount#11934, PULocationID#12058, Zone#11969]
+Arguments: [PULocationID#11930, Zone#11969, fare_amount#11934]
+
+(12) PhotonColumnarToRow
+Input [3]: [PULocationID#11930, Zone#11969, fare_amount#11934]
+
+(13) PhotonResultStage
+Input [3]: [PULocationID#11930, Zone#11969, fare_amount#11934]
+
+(14) AdaptiveSparkPlan
+Output [3]: [PULocationID#11930, Zone#11969, fare_amount#11934]
+Arguments: isFinalPlan=false
+
+
+== Photon Explanation ==
+The query is fully supported by Photon.
+
+== Physical Plan ==
+AdaptiveSparkPlan (13)
++- == Initial Plan ==
+   PhotonResultStage (12)
+   +- PhotonColumnarToRow (11)
+      +- PhotonSort (10)
+         +- PhotonShuffleExchangeSource (9)
+            +- PhotonShuffleMapStage (8)
+               +- PhotonShuffleExchangeSink (7)
+                  +- PhotonGroupingAgg (6)
+                     +- PhotonShuffleExchangeSource (5)
+                        +- PhotonShuffleMapStage (4)
+                           +- PhotonShuffleExchangeSink (3)
+                              +- PhotonGroupingAgg (2)
+                                 +- PhotonScan parquet  (1)
+
+
+(1) PhotonScan parquet 
+Output [4]: [trip_distance#11933, fare_amount#11934, duration_minutes#11938, trip_month#11943]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/cleaned_trips]
+ReadSchema: struct<trip_distance:double,fare_amount:double,duration_minutes:double>
+
+(2) PhotonGroupingAgg
+Input [4]: [trip_distance#11933, fare_amount#11934, duration_minutes#11938, trip_month#11943]
+Arguments: [trip_month#11943], [partial_count(1) AS count#12953L, partial_avg(trip_distance#11933) AS (sum#12956, count#12957L), partial_avg(duration_minutes#11938) AS (sum#12960, count#12961L), partial_avg(fare_amount#11934) AS (sum#12964, count#12965L)], [count#12952L, sum#12954, count#12955L, sum#12958, count#12959L, sum#12962, count#12963L], [trip_month#11943, count#12953L, sum#12956, count#12957L, sum#12960, count#12961L, sum#12964, count#12965L], false
+
+(3) PhotonShuffleExchangeSink
+Input [8]: [trip_month#11943, count#12953L, sum#12956, count#12957L, sum#12960, count#12961L, sum#12964, count#12965L]
+Arguments: hashpartitioning(trip_month#11943, 1024)
+
+(4) PhotonShuffleMapStage
+Input [8]: [trip_month#11943, count#12953L, sum#12956, count#12957L, sum#12960, count#12961L, sum#12964, count#12965L]
+Arguments: ENSURE_REQUIREMENTS, [id=#15722]
+
+(5) PhotonShuffleExchangeSource
+Input [8]: [trip_month#11943, count#12953L, sum#12956, count#12957L, sum#12960, count#12961L, sum#12964, count#12965L]
+Arguments: false
+
+(6) PhotonGroupingAgg
+Input [8]: [trip_month#11943, count#12953L, sum#12956, count#12957L, sum#12960, count#12961L, sum#12964, count#12965L]
+Arguments: [trip_month#11943], [finalmerge_count(merge count#12953L) AS count(1)#12948L, finalmerge_avg(merge sum#12956, count#12957L) AS avg(trip_distance)#12949, finalmerge_avg(merge sum#12960, count#12961L) AS avg(duration_minutes)#12950, finalmerge_avg(merge sum#12964, count#12965L) AS avg(fare_amount)#12951], [count(1)#12948L, avg(trip_distance)#12949, avg(duration_minutes)#12950, avg(fare_amount)#12951], [trip_month#11943, count(1)#12948L AS trips#12641L, avg(trip_distance)#12949 AS avg_distance_miles#12642, avg(duration_minutes)#12950 AS avg_duration_minutes#12643, avg(fare_amount)#12951 AS avg_base_fare#12644], true
+
+(7) PhotonShuffleExchangeSink
+Input [5]: [trip_month#11943, trips#12641L, avg_distance_miles#12642, avg_duration_minutes#12643, avg_base_fare#12644]
+Arguments: rangepartitioning(trip_month#11943 ASC NULLS FIRST, 1024)
+
+(8) PhotonShuffleMapStage
+Input [5]: [trip_month#11943, trips#12641L, avg_distance_miles#12642, avg_duration_minutes#12643, avg_base_fare#12644]
+Arguments: ENSURE_REQUIREMENTS, [id=#15728]
+
+(9) PhotonShuffleExchangeSource
+Input [5]: [trip_month#11943, trips#12641L, avg_distance_miles#12642, avg_duration_minutes#12643, avg_base_fare#12644]
+Arguments: false
+
+(10) PhotonSort
+Input [5]: [trip_month#11943, trips#12641L, avg_distance_miles#12642, avg_duration_minutes#12643, avg_base_fare#12644]
+Arguments: [trip_month#11943 ASC NULLS FIRST]
+
+(11) PhotonColumnarToRow
+Input [5]: [trip_month#11943, trips#12641L, avg_distance_miles#12642, avg_duration_minutes#12643, avg_base_fare#12644]
+
+(12) PhotonResultStage
+Input [5]: [trip_month#11943, trips#12641L, avg_distance_miles#12642, avg_duration_minutes#12643, avg_base_fare#12644]
+
+(13) AdaptiveSparkPlan
+Output [5]: [trip_month#11943, trips#12641L, avg_distance_miles#12642, avg_duration_minutes#12643, avg_base_fare#12644]
+Arguments: isFinalPlan=false
+
+
+== Photon Explanation ==
+The query is fully supported by Photon.
+
+Captured physical plans for scan pruning, grouping, broadcast joining, and SQL.
+
+
+CELL 25
+== Physical Plan ==
+AdaptiveSparkPlan (57)
++- == Initial Plan ==
+   PhotonResultStage (56)
+   +- PhotonColumnarToRow (55)
+      +- PhotonGroupingAgg (54)
+         +- PhotonShuffleExchangeSource (53)
+            +- PhotonShuffleMapStage (52)
+               +- PhotonShuffleExchangeSink (51)
+                  +- PhotonGroupingAgg (50)
+                     +- PhotonUnion (49)
+                        :- PhotonProject (2)
+                        :  +- PhotonScan parquet  (1)
+                        :- PhotonProject (4)
+                        :  +- PhotonScan parquet  (3)
+                        :- PhotonProject (6)
+                        :  +- PhotonScan parquet  (5)
+                        :- PhotonProject (8)
+                        :  +- PhotonScan parquet  (7)
+                        :- PhotonProject (10)
+                        :  +- PhotonScan parquet  (9)
+                        :- PhotonProject (12)
+                        :  +- PhotonScan parquet  (11)
+                        :- PhotonProject (14)
+                        :  +- PhotonScan parquet  (13)
+                        :- PhotonProject (16)
+                        :  +- PhotonScan parquet  (15)
+                        :- PhotonProject (18)
+                        :  +- PhotonScan parquet  (17)
+                        :- PhotonProject (20)
+                        :  +- PhotonScan parquet  (19)
+                        :- PhotonProject (22)
+                        :  +- PhotonScan parquet  (21)
+                        :- PhotonProject (24)
+                        :  +- PhotonScan parquet  (23)
+                        :- PhotonProject (26)
+                        :  +- PhotonScan parquet  (25)
+                        :- PhotonProject (28)
+                        :  +- PhotonScan parquet  (27)
+                        :- PhotonProject (30)
+                        :  +- PhotonScan parquet  (29)
+                        :- PhotonProject (32)
+                        :  +- PhotonScan parquet  (31)
+                        :- PhotonProject (34)
+                        :  +- PhotonScan parquet  (33)
+                        :- PhotonProject (36)
+                        :  +- PhotonScan parquet  (35)
+                        :- PhotonProject (38)
+                        :  +- PhotonScan parquet  (37)
+                        :- PhotonProject (40)
+                        :  +- PhotonScan parquet  (39)
+                        :- PhotonProject (42)
+                        :  +- PhotonScan parquet  (41)
+                        :- PhotonProject (44)
+                        :  +- PhotonScan parquet  (43)
+                        :- PhotonProject (46)
+                        :  +- PhotonScan parquet  (45)
+                        +- PhotonProject (48)
+                           +- PhotonScan parquet  (47)
+
+
+(1) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10172, tpep_dropoff_datetime#10173, trip_distance#10175, payment_type#10180L, fare_amount#10181, total_amount#10187]
+DictionaryFilters: [((fare_amount#10181 > 0.0) AND (fare_amount#10181 < Infinity)), ((trip_distance#10175 > 0.0) AND (trip_distance#10175 <= 100.0)), (total_amount#10187 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-01.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10175), isnotnull(fare_amount#10181), isnotnull(total_amount#10187), isnotnull(tpep_pickup_datetime#10172), isnotnull(tpep_dropoff_datetime#10173), (cast(tpep_pickup_datetime#10172 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10172 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10172 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-01), ((cast((cast(cast(tpep_dropoff_datetime#10173 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10172 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10173 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10172 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10175 > 0.0), (trip_distance#10175 <= 100.0), (fare_amount#10181 > 0.0), (total_amount#10187 >= fare_amount#10181), (fare_amount#10181 < Infinity), (total_amount#10187 < Infinity), NOT isnan(fare_amount#10181), NOT isnan(total_amount#10187), cast(payment_type#10180L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10172 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(2) PhotonProject
+Input [6]: [tpep_pickup_datetime#10172, tpep_dropoff_datetime#10173, trip_distance#10175, payment_type#10180L, fare_amount#10181, total_amount#10187]
+Arguments: [hour(cast(tpep_pickup_datetime#10172 as timestamp), Some(America/New_York)) AS pickup_hour#11341, fare_amount#10181 AS fare_amount#10196]
+
+(3) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10204, tpep_dropoff_datetime#10205, trip_distance#10207, payment_type#10212L, fare_amount#10213, total_amount#10219]
+DictionaryFilters: [((fare_amount#10213 > 0.0) AND (fare_amount#10213 < Infinity)), ((trip_distance#10207 > 0.0) AND (trip_distance#10207 <= 100.0)), (total_amount#10219 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-02.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10207), isnotnull(fare_amount#10213), isnotnull(total_amount#10219), isnotnull(tpep_pickup_datetime#10204), isnotnull(tpep_dropoff_datetime#10205), (cast(tpep_pickup_datetime#10204 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10204 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10204 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-02), ((cast((cast(cast(tpep_dropoff_datetime#10205 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10204 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10205 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10204 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10207 > 0.0), (trip_distance#10207 <= 100.0), (fare_amount#10213 > 0.0), (total_amount#10219 >= fare_amount#10213), (fare_amount#10213 < Infinity), (total_amount#10219 < Infinity), NOT isnan(fare_amount#10213), NOT isnan(total_amount#10219), cast(payment_type#10212L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10204 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(4) PhotonProject
+Input [6]: [tpep_pickup_datetime#10204, tpep_dropoff_datetime#10205, trip_distance#10207, payment_type#10212L, fare_amount#10213, total_amount#10219]
+Arguments: [hour(cast(tpep_pickup_datetime#10204 as timestamp), Some(America/New_York)) AS pickup_hour#13022, fare_amount#10213]
+
+(5) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10236, tpep_dropoff_datetime#10237, trip_distance#10239, payment_type#10244L, fare_amount#10245, total_amount#10251]
+DictionaryFilters: [(total_amount#10251 < Infinity), ((trip_distance#10239 > 0.0) AND (trip_distance#10239 <= 100.0)), ((fare_amount#10245 > 0.0) AND (fare_amount#10245 < Infinity))]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-03.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10239), isnotnull(fare_amount#10245), isnotnull(total_amount#10251), isnotnull(tpep_pickup_datetime#10236), isnotnull(tpep_dropoff_datetime#10237), (cast(tpep_pickup_datetime#10236 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10236 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10236 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-03), ((cast((cast(cast(tpep_dropoff_datetime#10237 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10236 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10237 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10236 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10239 > 0.0), (trip_distance#10239 <= 100.0), (fare_amount#10245 > 0.0), (total_amount#10251 >= fare_amount#10245), (fare_amount#10245 < Infinity), (total_amount#10251 < Infinity), NOT isnan(fare_amount#10245), NOT isnan(total_amount#10251), cast(payment_type#10244L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10236 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(6) PhotonProject
+Input [6]: [tpep_pickup_datetime#10236, tpep_dropoff_datetime#10237, trip_distance#10239, payment_type#10244L, fare_amount#10245, total_amount#10251]
+Arguments: [hour(cast(tpep_pickup_datetime#10236 as timestamp), Some(America/New_York)) AS pickup_hour#13023, fare_amount#10245]
+
+(7) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10268, tpep_dropoff_datetime#10269, trip_distance#10271, payment_type#10276L, fare_amount#10277, total_amount#10283]
+DictionaryFilters: [((fare_amount#10277 > 0.0) AND (fare_amount#10277 < Infinity)), ((trip_distance#10271 > 0.0) AND (trip_distance#10271 <= 100.0)), (total_amount#10283 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-04.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10271), isnotnull(fare_amount#10277), isnotnull(total_amount#10283), isnotnull(tpep_pickup_datetime#10268), isnotnull(tpep_dropoff_datetime#10269), (cast(tpep_pickup_datetime#10268 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10268 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10268 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-04), ((cast((cast(cast(tpep_dropoff_datetime#10269 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10268 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10269 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10268 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10271 > 0.0), (trip_distance#10271 <= 100.0), (fare_amount#10277 > 0.0), (total_amount#10283 >= fare_amount#10277), (fare_amount#10277 < Infinity), (total_amount#10283 < Infinity), NOT isnan(fare_amount#10277), NOT isnan(total_amount#10283), cast(payment_type#10276L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10268 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(8) PhotonProject
+Input [6]: [tpep_pickup_datetime#10268, tpep_dropoff_datetime#10269, trip_distance#10271, payment_type#10276L, fare_amount#10277, total_amount#10283]
+Arguments: [hour(cast(tpep_pickup_datetime#10268 as timestamp), Some(America/New_York)) AS pickup_hour#13024, fare_amount#10277]
+
+(9) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10300, tpep_dropoff_datetime#10301, trip_distance#10303, payment_type#10308L, fare_amount#10309, total_amount#10315]
+DictionaryFilters: [((fare_amount#10309 > 0.0) AND (fare_amount#10309 < Infinity)), ((trip_distance#10303 > 0.0) AND (trip_distance#10303 <= 100.0)), (total_amount#10315 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-05.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10303), isnotnull(fare_amount#10309), isnotnull(total_amount#10315), isnotnull(tpep_pickup_datetime#10300), isnotnull(tpep_dropoff_datetime#10301), (cast(tpep_pickup_datetime#10300 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10300 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10300 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-05), ((cast((cast(cast(tpep_dropoff_datetime#10301 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10300 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10301 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10300 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10303 > 0.0), (trip_distance#10303 <= 100.0), (fare_amount#10309 > 0.0), (total_amount#10315 >= fare_amount#10309), (fare_amount#10309 < Infinity), (total_amount#10315 < Infinity), NOT isnan(fare_amount#10309), NOT isnan(total_amount#10315), cast(payment_type#10308L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10300 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(10) PhotonProject
+Input [6]: [tpep_pickup_datetime#10300, tpep_dropoff_datetime#10301, trip_distance#10303, payment_type#10308L, fare_amount#10309, total_amount#10315]
+Arguments: [hour(cast(tpep_pickup_datetime#10300 as timestamp), Some(America/New_York)) AS pickup_hour#13025, fare_amount#10309]
+
+(11) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10332, tpep_dropoff_datetime#10333, trip_distance#10335, payment_type#10340L, fare_amount#10341, total_amount#10347]
+DictionaryFilters: [((fare_amount#10341 > 0.0) AND (fare_amount#10341 < Infinity)), ((trip_distance#10335 > 0.0) AND (trip_distance#10335 <= 100.0)), (total_amount#10347 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-06.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10335), isnotnull(fare_amount#10341), isnotnull(total_amount#10347), isnotnull(tpep_pickup_datetime#10332), isnotnull(tpep_dropoff_datetime#10333), (cast(tpep_pickup_datetime#10332 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10332 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10332 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-06), ((cast((cast(cast(tpep_dropoff_datetime#10333 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10332 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10333 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10332 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10335 > 0.0), (trip_distance#10335 <= 100.0), (fare_amount#10341 > 0.0), (total_amount#10347 >= fare_amount#10341), (fare_amount#10341 < Infinity), (total_amount#10347 < Infinity), NOT isnan(fare_amount#10341), NOT isnan(total_amount#10347), cast(payment_type#10340L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10332 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(12) PhotonProject
+Input [6]: [tpep_pickup_datetime#10332, tpep_dropoff_datetime#10333, trip_distance#10335, payment_type#10340L, fare_amount#10341, total_amount#10347]
+Arguments: [hour(cast(tpep_pickup_datetime#10332 as timestamp), Some(America/New_York)) AS pickup_hour#13026, fare_amount#10341]
+
+(13) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10364, tpep_dropoff_datetime#10365, trip_distance#10367, payment_type#10372L, fare_amount#10373, total_amount#10379]
+DictionaryFilters: [((fare_amount#10373 > 0.0) AND (fare_amount#10373 < Infinity)), ((trip_distance#10367 > 0.0) AND (trip_distance#10367 <= 100.0)), (total_amount#10379 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-07.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10367), isnotnull(fare_amount#10373), isnotnull(total_amount#10379), isnotnull(tpep_pickup_datetime#10364), isnotnull(tpep_dropoff_datetime#10365), (cast(tpep_pickup_datetime#10364 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10364 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10364 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-07), ((cast((cast(cast(tpep_dropoff_datetime#10365 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10364 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10365 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10364 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10367 > 0.0), (trip_distance#10367 <= 100.0), (fare_amount#10373 > 0.0), (total_amount#10379 >= fare_amount#10373), (fare_amount#10373 < Infinity), (total_amount#10379 < Infinity), NOT isnan(fare_amount#10373), NOT isnan(total_amount#10379), cast(payment_type#10372L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10364 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(14) PhotonProject
+Input [6]: [tpep_pickup_datetime#10364, tpep_dropoff_datetime#10365, trip_distance#10367, payment_type#10372L, fare_amount#10373, total_amount#10379]
+Arguments: [hour(cast(tpep_pickup_datetime#10364 as timestamp), Some(America/New_York)) AS pickup_hour#13027, fare_amount#10373]
+
+(15) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10396, tpep_dropoff_datetime#10397, trip_distance#10399, payment_type#10404L, fare_amount#10405, total_amount#10411]
+DictionaryFilters: [((trip_distance#10399 > 0.0) AND (trip_distance#10399 <= 100.0)), (total_amount#10411 < Infinity), ((fare_amount#10405 > 0.0) AND (fare_amount#10405 < Infinity))]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-08.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10399), isnotnull(fare_amount#10405), isnotnull(total_amount#10411), isnotnull(tpep_pickup_datetime#10396), isnotnull(tpep_dropoff_datetime#10397), (cast(tpep_pickup_datetime#10396 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10396 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10396 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-08), ((cast((cast(cast(tpep_dropoff_datetime#10397 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10396 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10397 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10396 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10399 > 0.0), (trip_distance#10399 <= 100.0), (fare_amount#10405 > 0.0), (total_amount#10411 >= fare_amount#10405), (fare_amount#10405 < Infinity), (total_amount#10411 < Infinity), NOT isnan(fare_amount#10405), NOT isnan(total_amount#10411), cast(payment_type#10404L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10396 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(16) PhotonProject
+Input [6]: [tpep_pickup_datetime#10396, tpep_dropoff_datetime#10397, trip_distance#10399, payment_type#10404L, fare_amount#10405, total_amount#10411]
+Arguments: [hour(cast(tpep_pickup_datetime#10396 as timestamp), Some(America/New_York)) AS pickup_hour#13028, fare_amount#10405]
+
+(17) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10428, tpep_dropoff_datetime#10429, trip_distance#10431, payment_type#10436L, fare_amount#10437, total_amount#10443]
+DictionaryFilters: [((trip_distance#10431 > 0.0) AND (trip_distance#10431 <= 100.0)), ((fare_amount#10437 > 0.0) AND (fare_amount#10437 < Infinity)), (total_amount#10443 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-09.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10431), isnotnull(fare_amount#10437), isnotnull(total_amount#10443), isnotnull(tpep_pickup_datetime#10428), isnotnull(tpep_dropoff_datetime#10429), (cast(tpep_pickup_datetime#10428 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10428 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10428 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-09), ((cast((cast(cast(tpep_dropoff_datetime#10429 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10428 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10429 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10428 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10431 > 0.0), (trip_distance#10431 <= 100.0), (fare_amount#10437 > 0.0), (total_amount#10443 >= fare_amount#10437), (fare_amount#10437 < Infinity), (total_amount#10443 < Infinity), NOT isnan(fare_amount#10437), NOT isnan(total_amount#10443), cast(payment_type#10436L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10428 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(18) PhotonProject
+Input [6]: [tpep_pickup_datetime#10428, tpep_dropoff_datetime#10429, trip_distance#10431, payment_type#10436L, fare_amount#10437, total_amount#10443]
+Arguments: [hour(cast(tpep_pickup_datetime#10428 as timestamp), Some(America/New_York)) AS pickup_hour#13029, fare_amount#10437]
+
+(19) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10460, tpep_dropoff_datetime#10461, trip_distance#10463, payment_type#10468L, fare_amount#10469, total_amount#10475]
+DictionaryFilters: [((trip_distance#10463 > 0.0) AND (trip_distance#10463 <= 100.0)), ((fare_amount#10469 > 0.0) AND (fare_amount#10469 < Infinity)), (total_amount#10475 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-10.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10463), isnotnull(fare_amount#10469), isnotnull(total_amount#10475), isnotnull(tpep_pickup_datetime#10460), isnotnull(tpep_dropoff_datetime#10461), (cast(tpep_pickup_datetime#10460 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10460 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10460 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-10), ((cast((cast(cast(tpep_dropoff_datetime#10461 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10460 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10461 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10460 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10463 > 0.0), (trip_distance#10463 <= 100.0), (fare_amount#10469 > 0.0), (total_amount#10475 >= fare_amount#10469), (fare_amount#10469 < Infinity), (total_amount#10475 < Infinity), NOT isnan(fare_amount#10469), NOT isnan(total_amount#10475), cast(payment_type#10468L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10460 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(20) PhotonProject
+Input [6]: [tpep_pickup_datetime#10460, tpep_dropoff_datetime#10461, trip_distance#10463, payment_type#10468L, fare_amount#10469, total_amount#10475]
+Arguments: [hour(cast(tpep_pickup_datetime#10460 as timestamp), Some(America/New_York)) AS pickup_hour#13030, fare_amount#10469]
+
+(21) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10492, tpep_dropoff_datetime#10493, trip_distance#10495, payment_type#10500L, fare_amount#10501, total_amount#10507]
+DictionaryFilters: [((fare_amount#10501 > 0.0) AND (fare_amount#10501 < Infinity)), ((trip_distance#10495 > 0.0) AND (trip_distance#10495 <= 100.0)), (total_amount#10507 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-11.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10495), isnotnull(fare_amount#10501), isnotnull(total_amount#10507), isnotnull(tpep_pickup_datetime#10492), isnotnull(tpep_dropoff_datetime#10493), (cast(tpep_pickup_datetime#10492 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10492 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10492 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-11), ((cast((cast(cast(tpep_dropoff_datetime#10493 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10492 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10493 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10492 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10495 > 0.0), (trip_distance#10495 <= 100.0), (fare_amount#10501 > 0.0), (total_amount#10507 >= fare_amount#10501), (fare_amount#10501 < Infinity), (total_amount#10507 < Infinity), NOT isnan(fare_amount#10501), NOT isnan(total_amount#10507), cast(payment_type#10500L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10492 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(22) PhotonProject
+Input [6]: [tpep_pickup_datetime#10492, tpep_dropoff_datetime#10493, trip_distance#10495, payment_type#10500L, fare_amount#10501, total_amount#10507]
+Arguments: [hour(cast(tpep_pickup_datetime#10492 as timestamp), Some(America/New_York)) AS pickup_hour#13031, fare_amount#10501]
+
+(23) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10524, tpep_dropoff_datetime#10525, trip_distance#10527, payment_type#10532L, fare_amount#10533, total_amount#10539]
+DictionaryFilters: [((trip_distance#10527 > 0.0) AND (trip_distance#10527 <= 100.0)), (total_amount#10539 < Infinity), ((fare_amount#10533 > 0.0) AND (fare_amount#10533 < Infinity))]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2023-12.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10527), isnotnull(fare_amount#10533), isnotnull(total_amount#10539), isnotnull(tpep_pickup_datetime#10524), isnotnull(tpep_dropoff_datetime#10525), (cast(tpep_pickup_datetime#10524 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10524 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10524 as timestamp), yyyy-MM, Some(America/New_York)) = 2023-12), ((cast((cast(cast(tpep_dropoff_datetime#10525 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10524 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10525 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10524 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10527 > 0.0), (trip_distance#10527 <= 100.0), (fare_amount#10533 > 0.0), (total_amount#10539 >= fare_amount#10533), (fare_amount#10533 < Infinity), (total_amount#10539 < Infinity), NOT isnan(fare_amount#10533), NOT isnan(total_amount#10539), cast(payment_type#10532L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10524 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(24) PhotonProject
+Input [6]: [tpep_pickup_datetime#10524, tpep_dropoff_datetime#10525, trip_distance#10527, payment_type#10532L, fare_amount#10533, total_amount#10539]
+Arguments: [hour(cast(tpep_pickup_datetime#10524 as timestamp), Some(America/New_York)) AS pickup_hour#13032, fare_amount#10533]
+
+(25) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10556, tpep_dropoff_datetime#10557, trip_distance#10559, payment_type#10564L, fare_amount#10565, total_amount#10571]
+DictionaryFilters: [((trip_distance#10559 > 0.0) AND (trip_distance#10559 <= 100.0)), (total_amount#10571 < Infinity), ((fare_amount#10565 > 0.0) AND (fare_amount#10565 < Infinity))]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-01.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10559), isnotnull(fare_amount#10565), isnotnull(total_amount#10571), isnotnull(tpep_pickup_datetime#10556), isnotnull(tpep_dropoff_datetime#10557), (cast(tpep_pickup_datetime#10556 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10556 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10556 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01), ((cast((cast(cast(tpep_dropoff_datetime#10557 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10556 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10557 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10556 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10559 > 0.0), (trip_distance#10559 <= 100.0), (fare_amount#10565 > 0.0), (total_amount#10571 >= fare_amount#10565), (fare_amount#10565 < Infinity), (total_amount#10571 < Infinity), NOT isnan(fare_amount#10565), NOT isnan(total_amount#10571), cast(payment_type#10564L as int) IN (1,2)]
+
+(26) PhotonProject
+Input [6]: [tpep_pickup_datetime#10556, tpep_dropoff_datetime#10557, trip_distance#10559, payment_type#10564L, fare_amount#10565, total_amount#10571]
+Arguments: [hour(cast(tpep_pickup_datetime#10556 as timestamp), Some(America/New_York)) AS pickup_hour#13033, fare_amount#10565]
+
+(27) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10588, tpep_dropoff_datetime#10589, trip_distance#10591, payment_type#10596L, fare_amount#10597, total_amount#10603]
+DictionaryFilters: [((trip_distance#10591 > 0.0) AND (trip_distance#10591 <= 100.0)), ((fare_amount#10597 > 0.0) AND (fare_amount#10597 < Infinity)), (total_amount#10603 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-02.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10591), isnotnull(fare_amount#10597), isnotnull(total_amount#10603), isnotnull(tpep_pickup_datetime#10588), isnotnull(tpep_dropoff_datetime#10589), (cast(tpep_pickup_datetime#10588 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10588 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10588 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-02), ((cast((cast(cast(tpep_dropoff_datetime#10589 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10588 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10589 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10588 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10591 > 0.0), (trip_distance#10591 <= 100.0), (fare_amount#10597 > 0.0), (total_amount#10603 >= fare_amount#10597), (fare_amount#10597 < Infinity), (total_amount#10603 < Infinity), NOT isnan(fare_amount#10597), NOT isnan(total_amount#10603), cast(payment_type#10596L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10588 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(28) PhotonProject
+Input [6]: [tpep_pickup_datetime#10588, tpep_dropoff_datetime#10589, trip_distance#10591, payment_type#10596L, fare_amount#10597, total_amount#10603]
+Arguments: [hour(cast(tpep_pickup_datetime#10588 as timestamp), Some(America/New_York)) AS pickup_hour#13034, fare_amount#10597]
+
+(29) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10620, tpep_dropoff_datetime#10621, trip_distance#10623, payment_type#10628L, fare_amount#10629, total_amount#10635]
+DictionaryFilters: [((trip_distance#10623 > 0.0) AND (trip_distance#10623 <= 100.0)), ((fare_amount#10629 > 0.0) AND (fare_amount#10629 < Infinity)), (total_amount#10635 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-03.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10623), isnotnull(fare_amount#10629), isnotnull(total_amount#10635), isnotnull(tpep_pickup_datetime#10620), isnotnull(tpep_dropoff_datetime#10621), (cast(tpep_pickup_datetime#10620 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10620 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10620 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-03), ((cast((cast(cast(tpep_dropoff_datetime#10621 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10620 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10621 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10620 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10623 > 0.0), (trip_distance#10623 <= 100.0), (fare_amount#10629 > 0.0), (total_amount#10635 >= fare_amount#10629), (fare_amount#10629 < Infinity), (total_amount#10635 < Infinity), NOT isnan(fare_amount#10629), NOT isnan(total_amount#10635), cast(payment_type#10628L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10620 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(30) PhotonProject
+Input [6]: [tpep_pickup_datetime#10620, tpep_dropoff_datetime#10621, trip_distance#10623, payment_type#10628L, fare_amount#10629, total_amount#10635]
+Arguments: [hour(cast(tpep_pickup_datetime#10620 as timestamp), Some(America/New_York)) AS pickup_hour#13035, fare_amount#10629]
+
+(31) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10652, tpep_dropoff_datetime#10653, trip_distance#10655, payment_type#10660L, fare_amount#10661, total_amount#10667]
+DictionaryFilters: [((trip_distance#10655 > 0.0) AND (trip_distance#10655 <= 100.0)), ((fare_amount#10661 > 0.0) AND (fare_amount#10661 < Infinity)), (total_amount#10667 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-04.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10655), isnotnull(fare_amount#10661), isnotnull(total_amount#10667), isnotnull(tpep_pickup_datetime#10652), isnotnull(tpep_dropoff_datetime#10653), (cast(tpep_pickup_datetime#10652 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10652 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10652 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-04), ((cast((cast(cast(tpep_dropoff_datetime#10653 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10652 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10653 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10652 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10655 > 0.0), (trip_distance#10655 <= 100.0), (fare_amount#10661 > 0.0), (total_amount#10667 >= fare_amount#10661), (fare_amount#10661 < Infinity), (total_amount#10667 < Infinity), NOT isnan(fare_amount#10661), NOT isnan(total_amount#10667), cast(payment_type#10660L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10652 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(32) PhotonProject
+Input [6]: [tpep_pickup_datetime#10652, tpep_dropoff_datetime#10653, trip_distance#10655, payment_type#10660L, fare_amount#10661, total_amount#10667]
+Arguments: [hour(cast(tpep_pickup_datetime#10652 as timestamp), Some(America/New_York)) AS pickup_hour#13036, fare_amount#10661]
+
+(33) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10684, tpep_dropoff_datetime#10685, trip_distance#10687, payment_type#10692L, fare_amount#10693, total_amount#10699]
+DictionaryFilters: [((trip_distance#10687 > 0.0) AND (trip_distance#10687 <= 100.0)), ((fare_amount#10693 > 0.0) AND (fare_amount#10693 < Infinity)), (total_amount#10699 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-05.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10687), isnotnull(fare_amount#10693), isnotnull(total_amount#10699), isnotnull(tpep_pickup_datetime#10684), isnotnull(tpep_dropoff_datetime#10685), (cast(tpep_pickup_datetime#10684 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10684 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10684 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-05), ((cast((cast(cast(tpep_dropoff_datetime#10685 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10684 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10685 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10684 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10687 > 0.0), (trip_distance#10687 <= 100.0), (fare_amount#10693 > 0.0), (total_amount#10699 >= fare_amount#10693), (fare_amount#10693 < Infinity), (total_amount#10699 < Infinity), NOT isnan(fare_amount#10693), NOT isnan(total_amount#10699), cast(payment_type#10692L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10684 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(34) PhotonProject
+Input [6]: [tpep_pickup_datetime#10684, tpep_dropoff_datetime#10685, trip_distance#10687, payment_type#10692L, fare_amount#10693, total_amount#10699]
+Arguments: [hour(cast(tpep_pickup_datetime#10684 as timestamp), Some(America/New_York)) AS pickup_hour#13037, fare_amount#10693]
+
+(35) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10716, tpep_dropoff_datetime#10717, trip_distance#10719, payment_type#10724L, fare_amount#10725, total_amount#10731]
+DictionaryFilters: [((trip_distance#10719 > 0.0) AND (trip_distance#10719 <= 100.0)), ((fare_amount#10725 > 0.0) AND (fare_amount#10725 < Infinity)), (total_amount#10731 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-06.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10719), isnotnull(fare_amount#10725), isnotnull(total_amount#10731), isnotnull(tpep_pickup_datetime#10716), isnotnull(tpep_dropoff_datetime#10717), (cast(tpep_pickup_datetime#10716 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10716 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10716 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-06), ((cast((cast(cast(tpep_dropoff_datetime#10717 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10716 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10717 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10716 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10719 > 0.0), (trip_distance#10719 <= 100.0), (fare_amount#10725 > 0.0), (total_amount#10731 >= fare_amount#10725), (fare_amount#10725 < Infinity), (total_amount#10731 < Infinity), NOT isnan(fare_amount#10725), NOT isnan(total_amount#10731), cast(payment_type#10724L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10716 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(36) PhotonProject
+Input [6]: [tpep_pickup_datetime#10716, tpep_dropoff_datetime#10717, trip_distance#10719, payment_type#10724L, fare_amount#10725, total_amount#10731]
+Arguments: [hour(cast(tpep_pickup_datetime#10716 as timestamp), Some(America/New_York)) AS pickup_hour#13038, fare_amount#10725]
+
+(37) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10748, tpep_dropoff_datetime#10749, trip_distance#10751, payment_type#10756L, fare_amount#10757, total_amount#10763]
+DictionaryFilters: [((trip_distance#10751 > 0.0) AND (trip_distance#10751 <= 100.0)), ((fare_amount#10757 > 0.0) AND (fare_amount#10757 < Infinity)), (total_amount#10763 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-07.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10751), isnotnull(fare_amount#10757), isnotnull(total_amount#10763), isnotnull(tpep_pickup_datetime#10748), isnotnull(tpep_dropoff_datetime#10749), (cast(tpep_pickup_datetime#10748 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10748 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10748 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-07), ((cast((cast(cast(tpep_dropoff_datetime#10749 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10748 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10749 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10748 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10751 > 0.0), (trip_distance#10751 <= 100.0), (fare_amount#10757 > 0.0), (total_amount#10763 >= fare_amount#10757), (fare_amount#10757 < Infinity), (total_amount#10763 < Infinity), NOT isnan(fare_amount#10757), NOT isnan(total_amount#10763), cast(payment_type#10756L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10748 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(38) PhotonProject
+Input [6]: [tpep_pickup_datetime#10748, tpep_dropoff_datetime#10749, trip_distance#10751, payment_type#10756L, fare_amount#10757, total_amount#10763]
+Arguments: [hour(cast(tpep_pickup_datetime#10748 as timestamp), Some(America/New_York)) AS pickup_hour#13039, fare_amount#10757]
+
+(39) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10780, tpep_dropoff_datetime#10781, trip_distance#10783, payment_type#10788L, fare_amount#10789, total_amount#10795]
+DictionaryFilters: [((trip_distance#10783 > 0.0) AND (trip_distance#10783 <= 100.0)), ((fare_amount#10789 > 0.0) AND (fare_amount#10789 < Infinity)), (total_amount#10795 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-08.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10783), isnotnull(fare_amount#10789), isnotnull(total_amount#10795), isnotnull(tpep_pickup_datetime#10780), isnotnull(tpep_dropoff_datetime#10781), (cast(tpep_pickup_datetime#10780 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10780 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10780 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-08), ((cast((cast(cast(tpep_dropoff_datetime#10781 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10780 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10781 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10780 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10783 > 0.0), (trip_distance#10783 <= 100.0), (fare_amount#10789 > 0.0), (total_amount#10795 >= fare_amount#10789), (fare_amount#10789 < Infinity), (total_amount#10795 < Infinity), NOT isnan(fare_amount#10789), NOT isnan(total_amount#10795), cast(payment_type#10788L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10780 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(40) PhotonProject
+Input [6]: [tpep_pickup_datetime#10780, tpep_dropoff_datetime#10781, trip_distance#10783, payment_type#10788L, fare_amount#10789, total_amount#10795]
+Arguments: [hour(cast(tpep_pickup_datetime#10780 as timestamp), Some(America/New_York)) AS pickup_hour#13040, fare_amount#10789]
+
+(41) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10812, tpep_dropoff_datetime#10813, trip_distance#10815, payment_type#10820L, fare_amount#10821, total_amount#10827]
+DictionaryFilters: [(total_amount#10827 < Infinity), ((trip_distance#10815 > 0.0) AND (trip_distance#10815 <= 100.0)), ((fare_amount#10821 > 0.0) AND (fare_amount#10821 < Infinity))]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-09.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10815), isnotnull(fare_amount#10821), isnotnull(total_amount#10827), isnotnull(tpep_pickup_datetime#10812), isnotnull(tpep_dropoff_datetime#10813), (cast(tpep_pickup_datetime#10812 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10812 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10812 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-09), ((cast((cast(cast(tpep_dropoff_datetime#10813 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10812 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10813 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10812 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10815 > 0.0), (trip_distance#10815 <= 100.0), (fare_amount#10821 > 0.0), (total_amount#10827 >= fare_amount#10821), (fare_amount#10821 < Infinity), (total_amount#10827 < Infinity), NOT isnan(fare_amount#10821), NOT isnan(total_amount#10827), cast(payment_type#10820L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10812 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(42) PhotonProject
+Input [6]: [tpep_pickup_datetime#10812, tpep_dropoff_datetime#10813, trip_distance#10815, payment_type#10820L, fare_amount#10821, total_amount#10827]
+Arguments: [hour(cast(tpep_pickup_datetime#10812 as timestamp), Some(America/New_York)) AS pickup_hour#13041, fare_amount#10821]
+
+(43) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10844, tpep_dropoff_datetime#10845, trip_distance#10847, payment_type#10852L, fare_amount#10853, total_amount#10859]
+DictionaryFilters: [(total_amount#10859 < Infinity), ((trip_distance#10847 > 0.0) AND (trip_distance#10847 <= 100.0)), ((fare_amount#10853 > 0.0) AND (fare_amount#10853 < Infinity))]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-10.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10847), isnotnull(fare_amount#10853), isnotnull(total_amount#10859), isnotnull(tpep_pickup_datetime#10844), isnotnull(tpep_dropoff_datetime#10845), (cast(tpep_pickup_datetime#10844 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10844 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10844 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-10), ((cast((cast(cast(tpep_dropoff_datetime#10845 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10844 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10845 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10844 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10847 > 0.0), (trip_distance#10847 <= 100.0), (fare_amount#10853 > 0.0), (total_amount#10859 >= fare_amount#10853), (fare_amount#10853 < Infinity), (total_amount#10859 < Infinity), NOT isnan(fare_amount#10853), NOT isnan(total_amount#10859), cast(payment_type#10852L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10844 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(44) PhotonProject
+Input [6]: [tpep_pickup_datetime#10844, tpep_dropoff_datetime#10845, trip_distance#10847, payment_type#10852L, fare_amount#10853, total_amount#10859]
+Arguments: [hour(cast(tpep_pickup_datetime#10844 as timestamp), Some(America/New_York)) AS pickup_hour#13042, fare_amount#10853]
+
+(45) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10876, tpep_dropoff_datetime#10877, trip_distance#10879, payment_type#10884L, fare_amount#10885, total_amount#10891]
+DictionaryFilters: [(total_amount#10891 < Infinity), ((trip_distance#10879 > 0.0) AND (trip_distance#10879 <= 100.0)), ((fare_amount#10885 > 0.0) AND (fare_amount#10885 < Infinity))]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-11.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10879), isnotnull(fare_amount#10885), isnotnull(total_amount#10891), isnotnull(tpep_pickup_datetime#10876), isnotnull(tpep_dropoff_datetime#10877), (cast(tpep_pickup_datetime#10876 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10876 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10876 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-11), ((cast((cast(cast(tpep_dropoff_datetime#10877 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10876 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10877 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10876 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10879 > 0.0), (trip_distance#10879 <= 100.0), (fare_amount#10885 > 0.0), (total_amount#10891 >= fare_amount#10885), (fare_amount#10885 < Infinity), (total_amount#10891 < Infinity), NOT isnan(fare_amount#10885), NOT isnan(total_amount#10891), cast(payment_type#10884L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10876 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(46) PhotonProject
+Input [6]: [tpep_pickup_datetime#10876, tpep_dropoff_datetime#10877, trip_distance#10879, payment_type#10884L, fare_amount#10885, total_amount#10891]
+Arguments: [hour(cast(tpep_pickup_datetime#10876 as timestamp), Some(America/New_York)) AS pickup_hour#13043, fare_amount#10885]
+
+(47) PhotonScan parquet 
+Output [6]: [tpep_pickup_datetime#10908, tpep_dropoff_datetime#10909, trip_distance#10911, payment_type#10916L, fare_amount#10917, total_amount#10923]
+DictionaryFilters: [((fare_amount#10917 > 0.0) AND (fare_amount#10917 < Infinity)), ((trip_distance#10911 > 0.0) AND (trip_distance#10911 <= 100.0)), (total_amount#10923 < Infinity)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/raw/yellow_tripdata_2024-12.parquet]
+ReadSchema: struct<tpep_pickup_datetime:timestamp_ntz,tpep_dropoff_datetime:timestamp_ntz,trip_distance:double,payment_type:bigint,fare_amount:double,total_amount:double>
+RequiredDataFilters: [isnotnull(trip_distance#10911), isnotnull(fare_amount#10917), isnotnull(total_amount#10923), isnotnull(tpep_pickup_datetime#10908), isnotnull(tpep_dropoff_datetime#10909), (cast(tpep_pickup_datetime#10908 as timestamp) >= 2023-01-01 00:00:00), (cast(tpep_pickup_datetime#10908 as timestamp) < 2025-01-01 00:00:00), (date_format(cast(tpep_pickup_datetime#10908 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-12), ((cast((cast(cast(tpep_dropoff_datetime#10909 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10908 as timestamp) as bigint)) as double) / 60.0) > 0.0), ((cast((cast(cast(tpep_dropoff_datetime#10909 as timestamp) as bigint) - cast(cast(tpep_pickup_datetime#10908 as timestamp) as bigint)) as double) / 60.0) <= 180.0), (trip_distance#10911 > 0.0), (trip_distance#10911 <= 100.0), (fare_amount#10917 > 0.0), (total_amount#10923 >= fare_amount#10917), (fare_amount#10917 < Infinity), (total_amount#10923 < Infinity), NOT isnan(fare_amount#10917), NOT isnan(total_amount#10923), cast(payment_type#10916L as int) IN (1,2), (date_format(cast(tpep_pickup_datetime#10908 as timestamp), yyyy-MM, Some(America/New_York)) = 2024-01)]
+
+(48) PhotonProject
+Input [6]: [tpep_pickup_datetime#10908, tpep_dropoff_datetime#10909, trip_distance#10911, payment_type#10916L, fare_amount#10917, total_amount#10923]
+Arguments: [hour(cast(tpep_pickup_datetime#10908 as timestamp), Some(America/New_York)) AS pickup_hour#13044, fare_amount#10917]
+
+(49) PhotonUnion
+Arguments: Generic
+
+(50) PhotonGroupingAgg
+Input [2]: [pickup_hour#11341, fare_amount#10196]
+Arguments: [pickup_hour#11341], [partial_count(1) AS count#13046L, partial_sum(fare_amount#10196) AS sum#13048], [count#13045L, sum#13047], [pickup_hour#11341, count#13046L, sum#13048], false
+
+(51) PhotonShuffleExchangeSink
+Input [3]: [pickup_hour#11341, count#13046L, sum#13048]
+Arguments: hashpartitioning(pickup_hour#11341, 1024)
+
+(52) PhotonShuffleMapStage
+Input [3]: [pickup_hour#11341, count#13046L, sum#13048]
+Arguments: ENSURE_REQUIREMENTS, [id=#16397]
+
+(53) PhotonShuffleExchangeSource
+Input [3]: [pickup_hour#11341, count#13046L, sum#13048]
+Arguments: false
+
+(54) PhotonGroupingAgg
+Input [3]: [pickup_hour#11341, count#13046L, sum#13048]
+Arguments: [pickup_hour#11341], [finalmerge_count(merge count#13046L) AS count(1)#12997L, finalmerge_sum(merge sum#13048) AS sum(fare_amount)#12998], [count(1)#12997L, sum(fare_amount)#12998], [pickup_hour#11341, count(1)#12997L AS trips#12995L, sum(fare_amount)#12998 AS fare_sum#12996], true
+
+(55) PhotonColumnarToRow
+Input [3]: [pickup_hour#11341, trips#12995L, fare_sum#12996]
+
+(56) PhotonResultStage
+Input [3]: [pickup_hour#11341, trips#12995L, fare_sum#12996]
+
+(57) AdaptiveSparkPlan
+Output [3]: [pickup_hour#11341, trips#12995L, fare_sum#12996]
+Arguments: isFinalPlan=false
+
+
+== Photon Explanation ==
+The query is fully supported by Photon.
+
+== Physical Plan ==
+AdaptiveSparkPlan (10)
++- == Initial Plan ==
+   PhotonResultStage (9)
+   +- PhotonColumnarToRow (8)
+      +- PhotonGroupingAgg (7)
+         +- PhotonShuffleExchangeSource (6)
+            +- PhotonShuffleMapStage (5)
+               +- PhotonShuffleExchangeSink (4)
+                  +- PhotonGroupingAgg (3)
+                     +- PhotonProject (2)
+                        +- PhotonScan parquet  (1)
+
+
+(1) PhotonScan parquet 
+Output [3]: [fare_amount#11934, pickup_hour#11939, trip_month#11943]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/cleaned_trips]
+PartitionFilters: [isnotnull(trip_month#11943), (trip_month#11943 = 2024-01)]
+ReadSchema: struct<fare_amount:double,pickup_hour:int>
+
+(2) PhotonProject
+Input [3]: [fare_amount#11934, pickup_hour#11939, trip_month#11943]
+Arguments: [pickup_hour#11939, fare_amount#11934]
+
+(3) PhotonGroupingAgg
+Input [2]: [pickup_hour#11939, fare_amount#11934]
+Arguments: [pickup_hour#11939], [partial_count(1) AS count#13061L, partial_sum(fare_amount#11934) AS sum#13063], [count#13060L, sum#13062], [pickup_hour#11939, count#13061L, sum#13063], false
+
+(4) PhotonShuffleExchangeSink
+Input [3]: [pickup_hour#11939, count#13061L, sum#13063]
+Arguments: hashpartitioning(pickup_hour#11939, 1024)
+
+(5) PhotonShuffleMapStage
+Input [3]: [pickup_hour#11939, count#13061L, sum#13063]
+Arguments: ENSURE_REQUIREMENTS, [id=#16566]
+
+(6) PhotonShuffleExchangeSource
+Input [3]: [pickup_hour#11939, count#13061L, sum#13063]
+Arguments: false
+
+(7) PhotonGroupingAgg
+Input [3]: [pickup_hour#11939, count#13061L, sum#13063]
+Arguments: [pickup_hour#11939], [finalmerge_count(merge count#13061L) AS count(1)#13058L, finalmerge_sum(merge sum#13063) AS sum(fare_amount)#13059], [count(1)#13058L, sum(fare_amount)#13059], [pickup_hour#11939, count(1)#13058L AS trips#13056L, sum(fare_amount)#13059 AS fare_sum#13057], true
+
+(8) PhotonColumnarToRow
+Input [3]: [pickup_hour#11939, trips#13056L, fare_sum#13057]
+
+(9) PhotonResultStage
+Input [3]: [pickup_hour#11939, trips#13056L, fare_sum#13057]
+
+(10) AdaptiveSparkPlan
+Output [3]: [pickup_hour#11939, trips#13056L, fare_sum#13057]
+Arguments: isFinalPlan=false
+
+
+== Photon Explanation ==
+The query is fully supported by Photon.
+
++----------+--------------+-------------------+
+|repetition|source        |seconds            |
++----------+--------------+-------------------+
+|1         |raw_cleaning  |17.220630105999987 |
+|1         |stored_parquet|0.5702949190000481 |
+|2         |raw_cleaning  |16.983264939000037 |
+|2         |stored_parquet|0.42088717199999337|
+|3         |raw_cleaning  |16.82192545500004  |
+|3         |stored_parquet|0.45369112599996697|
++----------+--------------+-------------------+
+
+Raw cleaning median 16.983s; stored Parquet median 0.454s; ratio 37.43x
+
+
+CELL 27
+== Physical Plan ==
+AdaptiveSparkPlan (5)
++- == Initial Plan ==
+   PhotonResultStage (4)
+   +- PhotonColumnarToRow (3)
+      +- PhotonGroupingAgg (2)
+         +- PhotonScan parquet  (1)
+
+
+(1) PhotonScan parquet 
+Output [2]: [pickup_hour#15119, fare_amount#15120]
+Location: PreparedDeltaFileIndex [dbfs:/Volumes/__databricks_internal_catalog_temp_table_manager_7474656828459706/__databricks__internal__session_schema_3cd68e29_aa2b_4f97_8f82_e4dde4744976/__databricks__internal__session_storage_d836682e_2058_4bb0_8f6e_0d837f6006b4/checkpoint_cache/f6705e70132947af81a84b13ce56be29]
+ReadSchema: struct<pickup_hour:int,fare_amount:double>
+
+(2) PhotonGroupingAgg
+Input [2]: [pickup_hour#15119, fare_amount#15120]
+Arguments: [pickup_hour#15119], [count(1), sum(fare_amount#15120)], [count(1)#15149L, sum(fare_amount)#15150], [pickup_hour#15119, count(1)#15149L AS trips#15121L, sum(fare_amount)#15150 AS fare_sum#15122], true
+
+(3) PhotonColumnarToRow
+Input [3]: [pickup_hour#15119, trips#15121L, fare_sum#15122]
+
+(4) PhotonResultStage
+Input [3]: [pickup_hour#15119, trips#15121L, fare_sum#15122]
+
+(5) AdaptiveSparkPlan
+Output [3]: [pickup_hour#15119, trips#15121L, fare_sum#15122]
+Arguments: isFinalPlan=false
+
+
+== Photon Explanation ==
+The query is fully supported by Photon.
+
++----------+--------+-------------------+
+|repetition|mode    |seconds            |
++----------+--------+-------------------+
+|1         |uncached|0.33015012199996363|
+|2         |uncached|0.3419292649999761 |
+|3         |uncached|0.48243871099998614|
+|1         |cached  |0.8358910800000103 |
+|2         |cached  |0.3980672659999982 |
+|3         |cached  |0.4670593399999916 |
++----------+--------+-------------------+
+
+Caching 2,719,113 rows took 8.013s including materialization. Median repeated actions were 0.342s uncached and 0.467s cached (0.73x uncached/cached). Estimated repeats to recover the full setup cost: no observed break-even.

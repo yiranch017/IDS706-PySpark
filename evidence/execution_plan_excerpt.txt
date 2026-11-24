@@ -1,0 +1,29 @@
+
+PhotonResultStage (4)
++- PhotonColumnarToRow (3)
+   +- PhotonProject (2)
+      +- PhotonScan parquet  (1)
+
+
+(1) PhotonScan parquet 
+Output [4]: [payment_type#11932, fare_amount#11934, pickup_hour#11939, trip_month#11943]
+DictionaryFilters: [(payment_type#11932 = 1)]
+Location: InMemoryFileIndex [dbfs:/Volumes/workspace/default/taxi_project/cleaned_trips]
+PartitionFilters: [isnotnull(trip_month#11943), (trip_month#11943 = 2024-01)]
+ReadSchema: struct<payment_type:int,fare_amount:double,pickup_hour:int>
+RequiredDataFilters: [isnotnull(payment_type#11932), (payment_type#11932 = 1)]
+
+(2) PhotonProject
+Input [4]: [payment_type#11932, fare_amount#11934, pickup_hour#11939, trip_month#11943]
+Arguments: [pickup_hour#11939, fare_amount#11934]
+
+(3) PhotonColumnarToRow
+Input [2]: [pickup_hour#11939, fare_amount#11934]
+
+(4) PhotonResultStage
+Input [2]: [pickup_hour#11939, fare_amount#11934]
+
+
+== Photon Explanation ==
+The query is fully supported by Photon.
+
